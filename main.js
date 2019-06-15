@@ -24,9 +24,9 @@ async function main() {
   };
   const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays);
 
-  var cameraX = 8.0;
-  var cameraY = 5.0;
-  var cameraZ = 7.0;
+  var cameraX = 1.0;
+  var cameraY = 2.0;
+  var cameraZ = 1.0;
 
 
   document.addEventListener('keydown', (event) => {
@@ -36,16 +36,22 @@ async function main() {
     var key = event.key || event.keyCode;
 
     if (key === 'w') {
-      cameraY += 1;
+      cameraZ += .1;
     }
     if (key === 'a') {
-      cameraX -= 1;
+      cameraX -= .1;
     }
     if (key === 's') {
-      cameraY -= 1;
+      cameraZ -= .1;
     }
     if (key === 'd') {
-      cameraX += 1;
+      cameraX += .1;
+    }
+    if (key === 'e') {
+      cameraY += .1;
+    }
+    if (key === 'q') {
+      cameraY -= .1;
     }
   });
 

@@ -4,13 +4,14 @@ uniform vec2 resolution;
 uniform vec3 cameraPosition;
 uniform float time;
 
-const int MAX_MARCHING_STEPS = 255;
-const float MIN_DIST = 0.0;
-const float MAX_DIST = 100.0;
+#define MAX_STEPS 100
+#define MAX_DIST 100.
+#define SURF_DIST .01
+
 const float EPSILON = 0.0001;
 
-float sphereSDF(vec3 samplePoint) {
-    return length(samplePoint) - 1.0;
+float sphereSDF(vec3 p, vec4 s) {
+    return length(p - s.xyz) - s.w;
 }
 
 float cubeSDF(vec3 p) {
@@ -21,29 +22,35 @@ float cubeSDF(vec3 p) {
     return insideDistance + outsideDistance;
 }
 
-float torusSDF(vec3 p) {
-  vec2 q = vec2(length(p.xz)-1.0,p.y);
+float torusSDF(vec3 p, vec3 t) {
+  vec2 q = vec2(length(p.xz - t.xz)-1.0,p.y - t.y);
   return length(q)-0.5;
 }
 
-
-float sceneSDF(vec3 samplePoint) {
-    return torusSDF(samplePoint);
+float sceneSDF(vec3 p) {
+	vec4 s = vec4(0, 1, 6, 1);
+	vec3 t = vec3(2, 1, 6);
+    
+    float torusDist = torusSDF(p, t);
+    float sphereDist = sphereSDF(p, s);
+    float planeDist = p.y;
+    
+    float d = min(torusDist, planeDist);
+    d = min(d, sphereDist);
+    return d;
 }
 
-float shortestDistanceToSurface(vec3 eye, vec3 marchingDirection, float start, float end) {
-    float depth = start;
-    for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
-        float dist = sceneSDF(eye + depth * marchingDirection);
-        if (dist < EPSILON) {
-			return depth;
-        }
-        depth += dist;
-        if (depth >= end) {
-            return end;
-        }
+float rayMarch(vec3 ro, vec3 rd) {
+	float dO=0.;
+    
+    for(int i=0; i<MAX_STEPS; i++) {
+    	vec3 p = ro + rd*dO;
+        float dS = sceneSDF(p);
+        dO += dS;
+        if(dO>MAX_DIST || dS<SURF_DIST) break;
     }
-    return end;
+    
+    return dO;
 }
 
 vec3 estimateNormal(vec3 p) {
@@ -79,54 +86,32 @@ vec3 phongIllumination(vec3 ka, vec3 kd, vec3 ks, float alpha, vec3 p, vec3 eye)
     
     vec3 lightPos = vec3(4.0, 10.0, 4.0);
     vec3 lightIntensity = vec3(0.4, 0.4, 0.4);
+
+    float d = rayMarch(p+estimateNormal(p)*SURF_DIST*2., normalize(lightPos - p));
+    if(d<length(lightPos-p)) color *= .1;
     
     color += phongContribForLight(kd, ks, alpha, p, eye, lightPos, lightIntensity);
     return color;
 }
 
-vec3 rayDirection(float fieldOfView, vec2 size, vec2 fragCoord) {
-    vec2 xy = fragCoord - size / 2.0;
-    float z = size.y / tan(radians(fieldOfView) / 2.0);
-    return normalize(vec3(xy, -z));
-}
-
-mat4 viewMatrix(vec3 eye, vec3 center, vec3 up) {
-    // Based on gluLookAt man page
-    vec3 f = normalize(center - eye);
-    vec3 s = normalize(cross(f, up));
-    vec3 u = cross(s, f);
-    return mat4(
-        vec4(s, 0.0),
-        vec4(u, 0.0),
-        vec4(-f, 0.0),
-        vec4(0.0, 0.0, 0.0, 1)
-    );
-}
-
-
 void main() {
-    vec3 viewDir = rayDirection(45.0, resolution.xy, gl_FragCoord.xy);
-    vec3 eye = vec3(cameraPosition);
+    vec2 uv = (gl_FragCoord.xy-.5*resolution.xy)/resolution.y;
 
-    mat4 viewToWorld = viewMatrix(eye, vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0));
+    vec3 col = vec3(0);
     
-    vec3 worldDir = (viewToWorld * vec4(viewDir, 0.0)).xyz;
+    vec3 ro = vec3(cameraPosition);
+    vec3 rd = normalize(vec3(uv.x, uv.y, 1));
+
+    float d = rayMarch(ro, rd);
     
-    float dist = shortestDistanceToSurface(eye, worldDir, MIN_DIST, MAX_DIST);
-    
-    if (dist > MAX_DIST - EPSILON) {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-		return;
-    }
-    
-    vec3 p = eye + dist * worldDir;
-    
+    vec3 p = ro + rd * d;
+
     vec3 Ka = vec3(0.2, 0.2, 0.2);
     vec3 Kd = vec3(0.298, 0.698, 0.2);
     vec3 Ks = vec3(1.0, 1.0, 1.0);
     float shininess = 10.0;
     
-    vec3 color = phongIllumination(Ka, Kd, Ks, shininess, p, eye);
+    col = phongIllumination(Ka, Kd, Ks, shininess, p, ro); 
     
-    gl_FragColor = vec4(color, 1.0);
+    gl_FragColor = vec4(col,1.0);
 }
