@@ -10,12 +10,12 @@ uniform float time;
 
 const float EPSILON = 0.0001;
 
-float sphereSDF(vec3 p, vec4 s) {
-    return length(p - s.xyz) - s.w;
+float sphereSDF(vec3 p, vec3 s) {
+    return length(p - s.xyz) - 1.0;
 }
 
-float cubeSDF(vec3 p) {
-    vec3 d = abs(p) - vec3(1.0, 1.0, 1.0);
+float cubeSDF(vec3 p, vec3 c) {
+    vec3 d = abs(p - c) - vec3(1.0, 1.0, 1.0);
     float insideDistance = min(max(d.x, max(d.y, d.z)), 0.0);
     float outsideDistance = length(max(d, 0.0));
     
@@ -28,15 +28,18 @@ float torusSDF(vec3 p, vec3 t) {
 }
 
 float sceneSDF(vec3 p) {
-	vec4 s = vec4(0, 1, 6, 1);
+	vec3 s = vec3(0, 1, 6);
 	vec3 t = vec3(2, 1, 6);
+	vec3 c = vec3(4, 1, 6);
     
     float torusDist = torusSDF(p, t);
     float sphereDist = sphereSDF(p, s);
+    float cubeDist = cubeSDF(p, c);
     float planeDist = p.y;
     
     float d = min(torusDist, planeDist);
     d = min(d, sphereDist);
+    d = min(d, cubeDist);
     return d;
 }
 
@@ -70,6 +73,11 @@ vec3 phongContribForLight(vec3 kd, vec3 ks, float alpha, vec3 p, vec3 eye, vec3 
     float dotLN = dot(L, N);
     float dotRV = dot(R, V);
     
+    float d = rayMarch(p + N * SURF_DIST * 2.0, L);
+    if(d < length(lightPos-p)) {
+        lightIntensity *= .1;
+    }
+
     if (dotLN < 0.0) {
         return vec3(0.0, 0.0, 0.0);
     } 
@@ -85,10 +93,7 @@ vec3 phongIllumination(vec3 ka, vec3 kd, vec3 ks, float alpha, vec3 p, vec3 eye)
     vec3 color = ambientLight * ka;
     
     vec3 lightPos = vec3(4.0, 10.0, 4.0);
-    vec3 lightIntensity = vec3(0.4, 0.4, 0.4);
-
-    float d = rayMarch(p+estimateNormal(p)*SURF_DIST*2., normalize(lightPos - p));
-    if(d<length(lightPos-p)) color *= .1;
+    vec3 lightIntensity = vec3(0.6, 0.6, 0.6);
     
     color += phongContribForLight(kd, ks, alpha, p, eye, lightPos, lightIntensity);
     return color;
