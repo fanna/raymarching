@@ -28,7 +28,6 @@ async function main() {
   var cameraY = 2.0;
   var cameraZ = 1.0;
 
-
   document.addEventListener('keydown', (event) => {
     if (event.defaultPrevented) {
       return;
