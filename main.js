@@ -1,28 +1,35 @@
-import { fetchShader } from "./utils.js"
+import { fetchShader, createShader, createProgram } from "./utils.js"
 
 async function main() {
-  const vertexShader = await fetchShader("vertex");
-  const fragmentShader = await fetchShader("fragment");
+  const vertexShaderSource = await fetchShader("vertex");
+  const fragmentShaderSource = await fetchShader("fragment");
 
-  const body = document.getElementsByTagName("BODY")[0];
-  const vElem = document.createElement("script");
-  vElem.id = "vs";
-  vElem.type = "notjs"
-  vElem.append(vertexShader);
-  body.appendChild(vElem);
-  const fElem = document.createElement("script");
-  fElem.id = "fs";
-  fElem.type = "notjs"
-  fElem.append(fragmentShader);
-  body.appendChild(fElem);
+  var canvas = document.getElementById("c");
+  var gl = canvas.getContext("webgl");
+  if (!gl) {
+    return;
+  }
+  var vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+  var fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+  var program = createProgram(gl, vertexShader, fragmentShader);
 
-  const gl = document.querySelector("#c").getContext("webgl");
-  const programInfo = twgl.createProgramInfo(gl, ["vs", "fs"]);
+  var positionAttributeLocation = gl.getAttribLocation(program, "position");
+  var positionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+  var positions = [ -1, 1, 1, 1, 1, -1, 1, -1, -1, 1, -1, -1 ];
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
 
-  const arrays = {
-    position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0],
-  };
-  const bufferInfo = twgl.createBufferInfoFromArrays(gl, arrays);
+  var size = 2;
+  var type = gl.FLOAT;
+  var normalize = false;
+  var stride = 0;
+  var offset = 0;
+  gl.vertexAttribPointer(positionAttributeLocation, size, type, normalize, stride, offset);
+  gl.clearColor(0, 0, 0, 0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+  var primitiveType = gl.TRIANGLES;
+  var offset = 0;
+  var count = 6;
 
   var cameraX = 1.0;
   var cameraY = 2.0;
@@ -55,19 +62,26 @@ async function main() {
   });
 
   function render(time) {
-    twgl.resizeCanvasToDisplaySize(gl.canvas);
     gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
-
+  
     const uniforms = {
       time: time * 0.001,
       resolution: [gl.canvas.width, gl.canvas.height],
       cameraPosition: [cameraX, cameraY, cameraZ]
     };
 
-    gl.useProgram(programInfo.program);
-    twgl.setBuffersAndAttributes(gl, programInfo, bufferInfo);
-    twgl.setUniforms(programInfo, uniforms);
-    twgl.drawBufferInfo(gl, bufferInfo);
+    gl.useProgram(program);
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.enableVertexAttribArray(positionAttributeLocation);
+    
+    var positionUniformLocationTime = gl.getUniformLocation(program, "time");
+    var positionUniformLocationResolution = gl.getUniformLocation(program, "resolution");
+    var positionUniformLocationCameraPosition = gl.getUniformLocation(program, "camera");
+    gl.uniform1f(positionUniformLocationTime, uniforms.time);
+    gl.uniform2fv(positionUniformLocationResolution, uniforms.resolution);
+    gl.uniform3fv(positionUniformLocationCameraPosition, uniforms.cameraPosition);
+
+    gl.drawArrays(primitiveType, offset, count);
 
     requestAnimationFrame(render);
   }
